@@ -14,6 +14,13 @@ export default function AnalyticsScreen() {
           <Text style={styles.menuButtonText}>Workout History</Text>
         </Pressable>
 
+      <Pressable 
+        style={styles.menuButton} 
+        onPress={() => router.push('/StrengthTrends')} // Enable this route
+      >
+        <Text style={styles.menuButtonText}>Strength Trends (1RM)</Text>
+      </Pressable>
+
         <Pressable style={[styles.menuButton, styles.disabled]}>
           <Text style={styles.menuButtonText}>Strength Trends (Coming Soon)</Text>
         </Pressable>
@@ -23,6 +30,7 @@ export default function AnalyticsScreen() {
         </Pressable>
       </View>
     </View>
+    
   );
 }
 
