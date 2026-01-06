@@ -1,98 +1,178 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+// Importing our refactored components
+import { Category, EXERCISE_LIST } from '@/components/ExerciseData';
+import { WorkoutRow } from '@/components/workoutRow';
 
-export default function HomeScreen() {
+// Storage Keys
+const STORAGE_KEYS = {
+  CURRENT_WORKOUT: '@current_workout',
+  HISTORY: '@workout_history',
+  LAST_DATE: '@last_date',
+};
+
+export default function LogScreen() {
+  const router = useRouter();
+  const [sets, setSets] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // --- 1. Load Data on Startup (Page_Load) ---
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        const today = new Date().toLocaleDateString();
+        const lastDate = await AsyncStorage.getItem(STORAGE_KEYS.LAST_DATE);
+        const savedSets = await AsyncStorage.getItem(STORAGE_KEYS.CURRENT_WORKOUT);
+        
+        // Check for Daily Reset
+        if (lastDate !== today && lastDate !== null) {
+          // Archive yesterday's work
+          if (savedSets) {
+            const historyJson = await AsyncStorage.getItem(STORAGE_KEYS.HISTORY);
+            const history = historyJson ? JSON.parse(historyJson) : [];
+            const archivedWorkout = { date: lastDate, data: JSON.parse(savedSets) };
+            await AsyncStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify([...history, archivedWorkout]));
+          }
+          // Start fresh for new day
+          setSets([{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }]);
+        } else {
+          // Resume today's session
+          setSets(savedSets ? JSON.parse(savedSets) : [{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }]);
+        }
+        
+        await AsyncStorage.setItem(STORAGE_KEYS.LAST_DATE, today);
+      } catch (e) {
+        console.error("Load Error:", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeApp();
+  }, []);
+
+  // --- 2. Auto-Save Logic ---
+  useEffect(() => {
+    if (!isLoading) {
+      AsyncStorage.setItem(STORAGE_KEYS.CURRENT_WORKOUT, JSON.stringify(sets));
+    }
+  }, [sets, isLoading]);
+
+  // --- 3. Interaction Handlers ---
+  const handleUpdate = (id: string, updates: any) => {
+    setSets(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
+  const handleRowSubmit = (id: string) => {
+    const currentRow = sets.find(s => s.id === id);
+    if (!currentRow) return;
+
+    const isComplete = currentRow.exercise && currentRow.reps && currentRow.weight;
+    const isLastRow = sets[sets.length - 1].id === id;
+
+    if (isComplete && isLastRow) {
+      setSets([...sets, { id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }]);
+    }
+  };
+
+  // NEW: Delete Handler
+  const handleDelete = (id: string) => {
+    const newSets = sets.filter(s => s.id !== id);
+    
+    // If we just deleted the last row, add a fresh one back in
+    if (newSets.length === 0) {
+      setSets([{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }]);
+    } else {
+      setSets(newSets);
+    }
+  };
+
+  const getPrevCategory = (index: number): Category | undefined => {
+    if (index === 0) return undefined;
+    const prevName = sets[index - 1].exercise;
+    return EXERCISE_LIST.find(e => e.name === prevName)?.category;
+  };
+
+  // Loading State UI
+  if (isLoading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#1971c2" />
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={100} 
+      >
+        <View style={styles.container}>
+          <View style={styles.labelRow}>
+            {/* Tweaked flex values to match the WorkoutRow layout */}
+            <Text style={[styles.labelText, { flex: 5 }]}>Exercise</Text>
+            <Text style={[styles.labelText, { flex: 1.8 }]}>Reps</Text>
+            <Text style={[styles.labelText, { flex: 2.2 }]}>Weight(kg)</Text>
+            <View style={{ flex: 1 }} /> 
+          </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
+            {sets.map((item, index) => {
+              // Logic: Only show delete if it's NOT the last row, 
+              // OR if it's the last row but has some data in it.
+              const isLastRow = index === sets.length - 1;
+              const hasData = item.exercise || item.reps || item.weight;
+              const showDelete = !isLastRow || hasData;
+
+              return (
+                <WorkoutRow 
+                  key={item.id} 
+                  data={item} 
+                  onUpdate={handleUpdate} 
+                  onRowSubmit={handleRowSubmit}
+                  // If showDelete is false, we pass undefined or a null function
+                  onDelete={showDelete ? handleDelete : undefined} 
+                  prevCategory={getPrevCategory(index)}
+                />
+              );
+            })}
+          </ScrollView>
+          
+          {/* <Pressable style={styles.navButton} onPress={() => router.push('/analytics')}>
+            <Text style={styles.navButtonText}>View Analytics & History</Text>
+          </Pressable> */}
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: { flex: 1, paddingHorizontal: 15, backgroundColor: '#fff' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  labelRow: { flexDirection: 'row', marginBottom: 8, paddingHorizontal: 4, gap: 6, marginTop: 10 },
+  labelText: { fontSize: 12, fontWeight: 'bold', color: '#999', textTransform: 'uppercase' },
+  navButton: { 
+    backgroundColor: '#1971c2', 
+    padding: 16, 
+    borderRadius: 12, 
+    alignItems: 'center', 
+    marginBottom: 20,
+    marginTop: 10 
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  navButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
 });
