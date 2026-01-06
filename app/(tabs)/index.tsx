@@ -125,7 +125,7 @@ export default function LogScreen() {
           <View style={styles.labelRow}>
             <Text style={[styles.labelText, { flex: 5 }]}>Exercise</Text>
             <Text style={[styles.labelText, { flex: 1.8 }]}>Reps</Text>
-            <Text style={[styles.labelText, { flex: 2.2 }]}>Weight(kg)</Text>
+            <Text style={[styles.labelText, { flex: 2.2 }]}>Kg</Text>
             <View style={{ flex: 1 }} /> 
           </View>
 
