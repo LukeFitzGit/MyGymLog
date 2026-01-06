@@ -119,21 +119,23 @@ export default function LogScreen() {
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         style={{ flex: 1 }}
-        keyboardVerticalOffset={100} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0} 
       >
         <View style={styles.container}>
           <View style={styles.labelRow}>
-            {/* Tweaked flex values to match the WorkoutRow layout */}
             <Text style={[styles.labelText, { flex: 5 }]}>Exercise</Text>
             <Text style={[styles.labelText, { flex: 1.8 }]}>Reps</Text>
             <Text style={[styles.labelText, { flex: 2.2 }]}>Weight(kg)</Text>
             <View style={{ flex: 1 }} /> 
           </View>
 
-          <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
+          <ScrollView 
+            keyboardShouldPersistTaps="handled" 
+            style={{ flex: 1 }}
+            // FIX: Added padding at the bottom of the scroll content
+            contentContainerStyle={styles.scrollContent}
+          >
             {sets.map((item, index) => {
-              // Logic: Only show delete if it's NOT the last row, 
-              // OR if it's the last row but has some data in it.
               const isLastRow = index === sets.length - 1;
               const hasData = item.exercise || item.reps || item.weight;
               const showDelete = !isLastRow || hasData;
@@ -144,17 +146,12 @@ export default function LogScreen() {
                   data={item} 
                   onUpdate={handleUpdate} 
                   onRowSubmit={handleRowSubmit}
-                  // If showDelete is false, we pass undefined or a null function
                   onDelete={showDelete ? handleDelete : undefined} 
                   prevCategory={getPrevCategory(index)}
                 />
               );
             })}
           </ScrollView>
-          
-          {/* <Pressable style={styles.navButton} onPress={() => router.push('/analytics')}>
-            <Text style={styles.navButtonText}>View Analytics & History</Text>
-          </Pressable> */}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -163,16 +160,11 @@ export default function LogScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 15, backgroundColor: '#fff' },
+  // FIX: Style to ensure the last row isn't hidden by the bottom tabs
+  scrollContent: { 
+    paddingBottom: 100 
+  },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   labelRow: { flexDirection: 'row', marginBottom: 8, paddingHorizontal: 4, gap: 6, marginTop: 10 },
   labelText: { fontSize: 12, fontWeight: 'bold', color: '#999', textTransform: 'uppercase' },
-  navButton: { 
-    backgroundColor: '#1971c2', 
-    padding: 16, 
-    borderRadius: 12, 
-    alignItems: 'center', 
-    marginBottom: 20,
-    marginTop: 10 
-  },
-  navButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
 });
