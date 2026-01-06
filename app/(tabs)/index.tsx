@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -5,6 +6,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -16,6 +18,40 @@ import {
 import { Category, EXERCISE_LIST } from '@/components/ExerciseData';
 import { WorkoutRow } from '@/components/workoutRow';
 
+// --- 1. TypeScript Interfaces ---
+interface WorkoutSet {
+  id: string;
+  exercise: string;
+  reps: string;
+  weight: string;
+  isEditing: boolean;
+}
+
+interface WorkoutGroupData {
+  exercise: string;
+  items: WorkoutSet[];
+}
+
+// --- 2. Sub-Component: WorkoutGroup (Accordion) ---
+const WorkoutGroup = ({ title, children, totalSets }: { title: string, children: React.ReactNode, totalSets: number }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <View style={styles.groupContainer}>
+      <Pressable style={styles.groupHeader} onPress={() => setIsOpen(!isOpen)}>
+        <View style={styles.headerLeft}>
+          <Ionicons name={isOpen ? "chevron-down" : "chevron-forward"} size={18} color="#1971c2" />
+          <Text style={styles.headerText}>{title || "New Exercise"}</Text>
+        </View>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{totalSets} Sets</Text>
+        </View>
+      </Pressable>
+      {isOpen && <View style={styles.groupContent}>{children}</View>}
+    </View>
+  );
+};
+
 // Storage Keys
 const STORAGE_KEYS = {
   CURRENT_WORKOUT: '@current_workout',
@@ -25,10 +61,10 @@ const STORAGE_KEYS = {
 
 export default function LogScreen() {
   const router = useRouter();
-  const [sets, setSets] = useState<any[]>([]);
+  const [sets, setSets] = useState<WorkoutSet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- 1. Load Data on Startup (Page_Load) ---
+  // --- 3. Initialization Logic ---
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -36,22 +72,25 @@ export default function LogScreen() {
         const lastDate = await AsyncStorage.getItem(STORAGE_KEYS.LAST_DATE);
         const savedSets = await AsyncStorage.getItem(STORAGE_KEYS.CURRENT_WORKOUT);
         
-        // Check for Daily Reset
+        let initialSets: WorkoutSet[] = [];
+        
         if (lastDate !== today && lastDate !== null) {
-          // Archive yesterday's work
           if (savedSets) {
             const historyJson = await AsyncStorage.getItem(STORAGE_KEYS.HISTORY);
             const history = historyJson ? JSON.parse(historyJson) : [];
             const archivedWorkout = { date: lastDate, data: JSON.parse(savedSets) };
             await AsyncStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify([...history, archivedWorkout]));
           }
-          // Start fresh for new day
-          setSets([{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }]);
+          initialSets = [{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }];
         } else {
-          // Resume today's session
-          setSets(savedSets ? JSON.parse(savedSets) : [{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }]);
+          initialSets = savedSets ? JSON.parse(savedSets) : [{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }];
         }
-        
+
+        if (initialSets.length === 0) {
+          initialSets = [{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }];
+        }
+
+        setSets(initialSets);
         await AsyncStorage.setItem(STORAGE_KEYS.LAST_DATE, today);
       } catch (e) {
         console.error("Load Error:", e);
@@ -63,15 +102,15 @@ export default function LogScreen() {
     initializeApp();
   }, []);
 
-  // --- 2. Auto-Save Logic ---
+  // --- 4. Auto-Save Logic ---
   useEffect(() => {
     if (!isLoading) {
       AsyncStorage.setItem(STORAGE_KEYS.CURRENT_WORKOUT, JSON.stringify(sets));
     }
   }, [sets, isLoading]);
 
-  // --- 3. Interaction Handlers ---
-  const handleUpdate = (id: string, updates: any) => {
+  // --- 5. Interaction Handlers ---
+  const handleUpdate = (id: string, updates: Partial<WorkoutSet>) => {
     setSets(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
@@ -87,16 +126,13 @@ export default function LogScreen() {
     }
   };
 
-  // NEW: Delete Handler
   const handleDelete = (id: string) => {
-    const newSets = sets.filter(s => s.id !== id);
-    
-    // If we just deleted the last row, add a fresh one back in
-    if (newSets.length === 0) {
-      setSets([{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }]);
-    } else {
-      setSets(newSets);
-    }
+    setSets(prev => {
+      const newSets = prev.filter(s => s.id !== id);
+      return newSets.length === 0 
+        ? [{ id: Date.now().toString(), exercise: '', reps: '', weight: '', isEditing: true }]
+        : newSets;
+    });
   };
 
   const getPrevCategory = (index: number): Category | undefined => {
@@ -105,7 +141,17 @@ export default function LogScreen() {
     return EXERCISE_LIST.find(e => e.name === prevName)?.category;
   };
 
-  // Loading State UI
+  // --- 6. Grouping Logic ---
+  const groupedSets = sets.reduce((groups: WorkoutGroupData[], set: WorkoutSet) => {
+    const lastGroup = groups[groups.length - 1];
+    if (!lastGroup || lastGroup.exercise !== set.exercise) {
+      groups.push({ exercise: set.exercise, items: [set] });
+    } else {
+      lastGroup.items.push(set);
+    }
+    return groups;
+  }, []);
+
   if (isLoading) {
     return (
       <View style={styles.center}>
@@ -132,23 +178,42 @@ export default function LogScreen() {
           <ScrollView 
             keyboardShouldPersistTaps="handled" 
             style={{ flex: 1 }}
-            // FIX: Added padding at the bottom of the scroll content
             contentContainerStyle={styles.scrollContent}
           >
-            {sets.map((item, index) => {
-              const isLastRow = index === sets.length - 1;
-              const hasData = item.exercise || item.reps || item.weight;
-              const showDelete = !isLastRow || hasData;
+            {groupedSets.map((group: WorkoutGroupData, groupIndex: number) => {
+              const isLatestGroup = groupIndex === groupedSets.length - 1;
+
+              const rows = group.items.map((item: WorkoutSet) => {
+                const globalIndex = sets.findIndex(s => s.id === item.id);
+                const isLastRow = globalIndex === sets.length - 1;
+                return (
+                  <WorkoutRow 
+                    key={item.id} 
+                    data={item} 
+                    onUpdate={handleUpdate} 
+                    onRowSubmit={handleRowSubmit}
+                    onDelete={!isLastRow ? handleDelete : undefined} 
+                    prevCategory={getPrevCategory(globalIndex)}
+                  />
+                );
+              });
+
+              if (isLatestGroup) {
+                return (
+                  <View key={`group-${groupIndex}`} style={{ marginBottom: 10 }}>
+                    {rows}
+                  </View>
+                );
+              }
 
               return (
-                <WorkoutRow 
-                  key={item.id} 
-                  data={item} 
-                  onUpdate={handleUpdate} 
-                  onRowSubmit={handleRowSubmit}
-                  onDelete={showDelete ? handleDelete : undefined} 
-                  prevCategory={getPrevCategory(index)}
-                />
+                <WorkoutGroup 
+                  key={`group-${groupIndex}`} 
+                  title={group.exercise} 
+                  totalSets={group.items.length}
+                >
+                  {rows}
+                </WorkoutGroup>
               );
             })}
           </ScrollView>
@@ -160,11 +225,15 @@ export default function LogScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 15, backgroundColor: '#fff' },
-  // FIX: Style to ensure the last row isn't hidden by the bottom tabs
-  scrollContent: { 
-    paddingBottom: 100 
-  },
+  scrollContent: { paddingBottom: 120 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   labelRow: { flexDirection: 'row', marginBottom: 8, paddingHorizontal: 4, gap: 6, marginTop: 10 },
   labelText: { fontSize: 12, fontWeight: 'bold', color: '#999', textTransform: 'uppercase' },
+  groupContainer: { marginBottom: 12, backgroundColor: '#fff', borderRadius: 10, overflow: 'hidden', borderWidth: 1, borderColor: '#e9ecef' },
+  groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#f8f9fa' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  headerText: { fontWeight: '700', color: '#343a40', fontSize: 14 },
+  badge: { backgroundColor: '#e7f5ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  badgeText: { color: '#1971c2', fontSize: 11, fontWeight: 'bold' },
+  groupContent: { padding: 8, backgroundColor: '#fff' }
 });

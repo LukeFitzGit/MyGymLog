@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'; // Import for the bin icon
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Category, EXERCISE_LIST, getMatches } from './ExerciseData';
@@ -13,7 +13,7 @@ interface WorkoutRowProps {
   };
   onUpdate: (id: string, updates: any) => void;
   onRowSubmit: (id: string) => void;
-  onDelete?: (id: string) => void; // Made optional with '?'
+  onDelete?: (id: string) => void;
   prevCategory?: Category;
 }
 
@@ -34,9 +34,11 @@ export const WorkoutRow = ({ data, onUpdate, onRowSubmit, onDelete, prevCategory
     onUpdate(data.id, { exercise: matches[nextIndex] });
   };
 
+  // Validation: Check if all fields are filled
+  const isRowComplete = data.exercise.trim() !== '' && data.reps.trim() !== '' && data.weight.trim() !== '';
+
   return (
     <View style={styles.row}>
-      {/* Exercise Field */}
       <View style={{ flex: 5 }}>
         {data.isEditing ? (
           <TextInput
@@ -79,56 +81,41 @@ export const WorkoutRow = ({ data, onUpdate, onRowSubmit, onDelete, prevCategory
           keyboardType="numeric"
           value={data.weight}
           onChangeText={(val) => onUpdate(data.id, { weight: val })}
-          onSubmitEditing={() => onRowSubmit(data.id)}
-          returnKeyType="done"
+          // We removed returnKeyType="done" here to get rid of the floating button
         />
       </View>
 
-      {/* Conditional Delete Button - Keeps layout consistent */}
-      {onDelete ? (
-        <Pressable 
-          style={styles.deleteButton} 
-          onPress={() => onDelete(data.id)}
-        >
-          <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
-        </Pressable>
-      ) : (
-        <View style={styles.deleteButton} />
-      )}
+      <View style={styles.actionContainer}>
+        {onDelete ? (
+          /* Show Trash Icon for existing rows */
+          <Pressable onPress={() => onDelete(data.id)}>
+            <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
+          </Pressable>
+        ) : (
+          /* Show Tick Icon for the adding row */
+          <Pressable 
+            onPress={() => isRowComplete && onRowSubmit(data.id)}
+            disabled={!isRowComplete}
+            style={({ pressed }) => [{ opacity: isRowComplete ? (pressed ? 0.5 : 1) : 0.3 }]}
+          >
+            <Ionicons 
+              name="checkmark-circle" 
+              size={24} 
+              color={isRowComplete ? "#1971c2" : "#adb5bd"} 
+            />
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  row: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    width: '100%', 
-    marginBottom: 8, 
-    gap: 6 
-  },
-  input: { 
-    backgroundColor: '#f8f9fa', 
-    borderWidth: 1, 
-    borderColor: '#dee2e6', 
-    borderRadius: 8, 
-    paddingVertical: 10, 
-    paddingHorizontal: 8, 
-    fontSize: 14, 
-    minHeight: 44, 
-    width: '100%', 
-    justifyContent: 'center' 
-  },
-  cycleButton: { 
-    backgroundColor: '#e7f5ff', 
-    borderColor: '#a5d8ff' 
-  },
-  exerciseText: { 
-    fontSize: 13, 
-    fontWeight: '600', 
-    color: '#1971c2' 
-  },
-  deleteButton: {
+  row: { flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 8, gap: 6 },
+  input: { backgroundColor: '#f8f9fa', borderWidth: 1, borderColor: '#dee2e6', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 8, fontSize: 14, minHeight: 44, width: '100%', justifyContent: 'center' },
+  cycleButton: { backgroundColor: '#e7f5ff', borderColor: '#a5d8ff' },
+  exerciseText: { fontSize: 13, fontWeight: '600', color: '#1971c2' },
+  actionContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
